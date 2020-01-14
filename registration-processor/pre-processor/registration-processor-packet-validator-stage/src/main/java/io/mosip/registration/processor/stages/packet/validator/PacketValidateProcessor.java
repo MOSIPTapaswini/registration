@@ -1,12 +1,12 @@
 package io.mosip.registration.processor.stages.packet.validator;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -17,13 +17,11 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.DataAccessException;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.type.CollectionType;
 
@@ -156,13 +154,13 @@ public class PacketValidateProcessor {
 
 	@Autowired
 	private IdRepoService idRepoService;
-	
+
 	@Autowired
 	private AuditUtility auditUtility;
-	
+
 	@Autowired
 	private ObjectMapper mapper;
-	
+
 	@Autowired
 	RestHelper helper;
 
@@ -189,7 +187,6 @@ public class PacketValidateProcessor {
 	@Autowired
 	RegistrationExceptionMapperUtil registrationStatusMapperUtil;
 
-	
 	public MessageDTO process(MessageDTO object, String stageName) {
 		TrimExceptionMessage trimMessage = new TrimExceptionMessage();
 		LogDescription description = new LogDescription();
@@ -219,21 +216,25 @@ public class PacketValidateProcessor {
 			Boolean isValid = validate(registrationStatusDto, packetMetaInfo, object, identityIteratorUtil,
 					packetValidationDto);
 			if (isValid) {
-//			if (true) {
-//				File file = new File("c:\\Users\\m1043226\\Documents\\audit.json");
-				
-				InputStream auditFileInputStream = fileSystemManager.getFile(registrationId,
-						PacketFiles.AUDIT.name());
-//				InputStream auditFileInputStream = new FileInputStream(file);
-				
-				CollectionType collectionType = mapper.getTypeFactory().constructCollectionType(List.class, AuditDTO.class);
+
+				InputStream auditFileInputStream = fileSystemManager.getFile(registrationId, PacketFiles.AUDIT.name());
+				CollectionType collectionType = mapper.getTypeFactory().constructCollectionType(List.class,
+						AuditDTO.class);
 				List<AuditDTO> regClientAuditDTOs = mapper.readValue(auditFileInputStream, collectionType);
-				//save audit details
-				auditUtility.saveAuditDetails(regClientAuditDTOs);
-				
-				System.out.println("Inside Process");
-				
-				
+				// save audit details
+				Runnable r = () -> {
+					try {
+						auditUtility.saveAuditDetails(regClientAuditDTOs);
+					} catch (Exception e) {
+						regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
+								LoggerFileConstant.REGISTRATIONID.toString(),
+								description.getCode() + " Inside Runnable " , "");
+
+					}
+				};
+				ExecutorService es = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+				es.submit(r);
+				es.shutdown();
 				registrationStatusDto
 						.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.SUCCESS.toString());
 				object.setIsValid(Boolean.TRUE);
@@ -466,6 +467,7 @@ public class PacketValidateProcessor {
 			auditLogRequestBuilder.createAuditRequestBuilder(description.getMessage(), eventId, eventName, eventType,
 					moduleId, moduleName, registrationId);
 		}
+		System.out.println("************Executed ***********");
 
 		return object;
 

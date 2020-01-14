@@ -2,8 +2,6 @@ package io.mosip.registration.processor.stages.helper;
 
 import java.util.function.Supplier;
 
-import org.springframework.stereotype.Component;
-
 import javax.net.ssl.SSLException;
 import javax.validation.Valid;
 
@@ -14,6 +12,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
+import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClient.RequestBodySpec;
@@ -31,11 +30,9 @@ import io.mosip.registration.processor.core.constant.LoggerFileConstant;
 import io.mosip.registration.processor.core.logger.RegProcessorLogger;
 import io.mosip.registration.processor.stages.Exception.RestServiceException;
 import io.mosip.registration.processor.stages.dto.RestRequestDTO;
-import io.mosip.registration.processor.stages.utils.AuditUtility;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
-
 import lombok.NoArgsConstructor;
 import reactor.core.publisher.Mono;
 
@@ -44,19 +41,13 @@ import reactor.core.publisher.Mono;
 public class RestHelperImpl implements RestHelper {
 
 	private static Logger mosipLogger = RegProcessorLogger.getLogger(RestHelperImpl.class);
-	
-	
+
 	private String authToken;
 	@Autowired
 	private Environment env;
 	@Autowired
 	private ObjectMapper mapper;
-	
-	@Autowired
-	private AuditUtility auditUtility;
-	
-	Mono<?> sendRequest=null;
-	
+
 	@Override
 	public Supplier<Object> requestAsync(@Valid RestRequestDTO request) {
 		try {
@@ -129,14 +120,14 @@ public class RestHelperImpl implements RestHelper {
 
 	private void generateAuthToken() {
 		ObjectNode requestBody = mapper.createObjectNode();
-		requestBody.put("clientId",  env.getProperty("token.request.clientId"));
+		requestBody.put("clientId", env.getProperty("token.request.clientId"));
 		requestBody.put("secretKey", env.getProperty("token.request.secretKey"));
 		requestBody.put("appId", env.getProperty("token.request.appid"));
 		RequestWrapper<ObjectNode> request = new RequestWrapper<>();
 		request.setRequesttime(DateUtils.getUTCCurrentDateTime());
 		request.setRequest(requestBody);
-		ClientResponse response = WebClient.create(env.getProperty("KEYBASEDTOKENAPI")).post()
-				.syncBody(request).exchange().block();
+		ClientResponse response = WebClient.create(env.getProperty("KEYBASEDTOKENAPI")).post().syncBody(request)
+				.exchange().block();
 		if (response.statusCode() == HttpStatus.OK) {
 			ObjectNode responseBody = response.bodyToMono(ObjectNode.class).block();
 			if (responseBody != null
@@ -145,11 +136,11 @@ public class RestHelperImpl implements RestHelper {
 				authToken = responseCookie.getValue();
 
 			} else {
-				mosipLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),"",
-						"Auth token generation failed: " + response);
+				mosipLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
+						"", "Auth token generation failed: " + response);
 			}
 		} else {
-			mosipLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),"",
+			mosipLogger.error(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(), "",
 					"AuthResponse : status-" + response.statusCode() + " :\n"
 							+ response.toEntity(String.class).block().getBody());
 		}
