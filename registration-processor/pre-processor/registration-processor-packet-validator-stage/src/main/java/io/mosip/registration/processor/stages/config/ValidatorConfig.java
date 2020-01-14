@@ -4,6 +4,7 @@ import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
+import java.util.concurrent.Executor;
 
 import javax.annotation.PostConstruct;
 
@@ -12,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.client.RestTemplate;
 
 import io.mosip.kernel.core.idobjectvalidator.constant.IdObjectValidatorSupportedOperations;
@@ -21,8 +23,11 @@ import io.mosip.kernel.core.idobjectvalidator.spi.IdObjectValidator;
 import io.mosip.kernel.core.util.StringUtils;
 import io.mosip.registration.processor.core.packet.dto.applicantcategory.ApplicantTypeDocument;
 import io.mosip.registration.processor.rest.client.utils.RestApiClient;
+import io.mosip.registration.processor.stages.helper.RestHelper;
+import io.mosip.registration.processor.stages.helper.RestHelperImpl;
 import io.mosip.registration.processor.stages.packet.validator.PacketValidateProcessor;
 import io.mosip.registration.processor.stages.packet.validator.PacketValidatorStage;
+import io.mosip.registration.processor.stages.utils.AuditUtility;
 import io.mosip.registration.processor.stages.utils.DocumentUtility;
 import io.mosip.registration.processor.stages.utils.IdObjectsSchemaValidationOperationMapper;
 import io.mosip.registration.processor.stages.utils.RestTemplateInterceptor;
@@ -74,7 +79,18 @@ public class ValidatorConfig {
 		restTemplate.setInterceptors(Collections.singletonList(new RestTemplateInterceptor(restApiClient)));
 		return restTemplate;
 	}
+	
+	@Bean
+	public RestHelper getRestHelper() {
+		return new RestHelperImpl();
+	}
+	
+	@Bean
+	public AuditUtility getAuditUtility() {
+		return new AuditUtility();
+	}
 
+	
 	@PostConstruct
 	public void validateReferenceValidator() throws ClassNotFoundException {
 		if (StringUtils.isNotBlank(env.getProperty(IDOBJECT_PROVIDER))) {
@@ -82,6 +98,7 @@ public class ValidatorConfig {
 		}
 	}
 
+	
 	@Bean
 	@Lazy
 	public IdObjectValidator referenceValidator()

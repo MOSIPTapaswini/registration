@@ -1,5 +1,7 @@
 package io.mosip.registration.processor.stages.packet.validator;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
@@ -15,12 +17,15 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 import org.springframework.dao.DataAccessException;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.type.CollectionType;
 
 import io.mosip.kernel.core.exception.BaseCheckedException;
 import io.mosip.kernel.core.exception.BaseUncheckedException;
@@ -51,6 +56,7 @@ import io.mosip.registration.processor.core.exception.util.PlatformErrorMessages
 import io.mosip.registration.processor.core.exception.util.PlatformSuccessMessages;
 import io.mosip.registration.processor.core.logger.LogDescription;
 import io.mosip.registration.processor.core.logger.RegProcessorLogger;
+import io.mosip.registration.processor.core.packet.dto.AuditDTO;
 import io.mosip.registration.processor.core.packet.dto.FieldValue;
 import io.mosip.registration.processor.core.packet.dto.Identity;
 import io.mosip.registration.processor.core.packet.dto.PacketMetaInfo;
@@ -73,7 +79,9 @@ import io.mosip.registration.processor.packet.storage.exception.ParsingException
 import io.mosip.registration.processor.packet.storage.utils.Utilities;
 import io.mosip.registration.processor.rest.client.audit.builder.AuditLogRequestBuilder;
 import io.mosip.registration.processor.stages.dto.PacketValidationDto;
+import io.mosip.registration.processor.stages.helper.RestHelper;
 import io.mosip.registration.processor.stages.utils.ApplicantDocumentValidation;
+import io.mosip.registration.processor.stages.utils.AuditUtility;
 import io.mosip.registration.processor.stages.utils.CheckSumValidation;
 import io.mosip.registration.processor.stages.utils.DocumentUtility;
 import io.mosip.registration.processor.stages.utils.FilesValidation;
@@ -148,6 +156,15 @@ public class PacketValidateProcessor {
 
 	@Autowired
 	private IdRepoService idRepoService;
+	
+	@Autowired
+	private AuditUtility auditUtility;
+	
+	@Autowired
+	private ObjectMapper mapper;
+	
+	@Autowired
+	RestHelper helper;
 
 	private static final String INDIVIDUALBIOMETRICS = "individualBiometrics";
 
@@ -172,6 +189,7 @@ public class PacketValidateProcessor {
 	@Autowired
 	RegistrationExceptionMapperUtil registrationStatusMapperUtil;
 
+	
 	public MessageDTO process(MessageDTO object, String stageName) {
 		TrimExceptionMessage trimMessage = new TrimExceptionMessage();
 		LogDescription description = new LogDescription();
@@ -201,6 +219,21 @@ public class PacketValidateProcessor {
 			Boolean isValid = validate(registrationStatusDto, packetMetaInfo, object, identityIteratorUtil,
 					packetValidationDto);
 			if (isValid) {
+//			if (true) {
+//				File file = new File("c:\\Users\\m1043226\\Documents\\audit.json");
+				
+				InputStream auditFileInputStream = fileSystemManager.getFile(registrationId,
+						PacketFiles.AUDIT.name());
+//				InputStream auditFileInputStream = new FileInputStream(file);
+				
+				CollectionType collectionType = mapper.getTypeFactory().constructCollectionType(List.class, AuditDTO.class);
+				List<AuditDTO> regClientAuditDTOs = mapper.readValue(auditFileInputStream, collectionType);
+				//save audit details
+				auditUtility.saveAuditDetails(regClientAuditDTOs);
+				
+				System.out.println("Inside Process");
+				
+				
 				registrationStatusDto
 						.setLatestTransactionStatusCode(RegistrationTransactionStatusCode.SUCCESS.toString());
 				object.setIsValid(Boolean.TRUE);
