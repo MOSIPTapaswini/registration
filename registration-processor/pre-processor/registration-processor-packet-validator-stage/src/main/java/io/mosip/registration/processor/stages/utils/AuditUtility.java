@@ -1,5 +1,8 @@
 package io.mosip.registration.processor.stages.utils;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -11,6 +14,10 @@ import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.type.CollectionType;
+
 import io.mosip.kernel.core.logger.spi.Logger;
 import io.mosip.registration.processor.core.constant.LoggerFileConstant;
 import io.mosip.registration.processor.core.constant.PacketFiles;
@@ -18,6 +25,7 @@ import io.mosip.registration.processor.core.logger.RegProcessorLogger;
 import io.mosip.registration.processor.core.packet.dto.AuditDTO;
 import io.mosip.registration.processor.core.packet.dto.AuditRequestDTO;
 import io.mosip.registration.processor.core.packet.dto.AuditRespDTO;
+import io.mosip.registration.processor.core.spi.filesystem.manager.PacketManager;
 import io.mosip.registration.processor.stages.dto.RestRequestDTO;
 import io.mosip.registration.processor.stages.helper.RestHelper;
 import io.mosip.registration.processor.stages.packet.validator.PacketValidateProcessor;
@@ -39,13 +47,25 @@ public class AuditUtility {
 	@Autowired
 	private Environment env;
 
+	@Autowired
+	private PacketManager fileSystemManager;
+	
+	@Autowired
+	private ObjectMapper mapper;
+	
 	@Async
-	public void saveAuditDetails(List<AuditDTO> auditDTOs) {
+	public void saveAuditDetails(String registrationId) {
 		try {
 			regProcLogger.debug(LoggerFileConstant.SESSIONID.toString(), LoggerFileConstant.REGISTRATIONID.toString(),
 					"", "AuditUtility::saveAuditDetails()::entry");
-
-			auditDTOs.parallelStream().forEach(audit -> {
+			
+			InputStream auditFileInputStream = fileSystemManager.getFile(registrationId, PacketFiles.AUDIT.name());
+			ObjectMapper mapper = new ObjectMapper();
+			CollectionType collectionType = mapper.getTypeFactory().constructCollectionType(List.class,
+					AuditDTO.class);
+			
+			List<AuditDTO> regClientAuditDTOs = mapper.readValue(auditFileInputStream, collectionType);
+			regClientAuditDTOs.parallelStream().forEach(audit -> {
 				RestRequestDTO request = buildRequest(audit);
 				restHelper.requestAsync(request);
 			});

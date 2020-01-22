@@ -183,7 +183,8 @@ public class PacketValidateProcessor {
 	private static final String PRE_REG_ID = "mosip.pre-registration.datasync.store";
 	private static final String VERSION = "1.0";
 	private static final String CREATED_BY = "MOSIP_SYSTEM";
-
+	String registrationId = null;
+	
 	@Autowired
 	RegistrationExceptionMapperUtil registrationStatusMapperUtil;
 
@@ -192,7 +193,7 @@ public class PacketValidateProcessor {
 		LogDescription description = new LogDescription();
 		PacketValidationDto packetValidationDto = new PacketValidationDto();
 		String preRegId = null;
-		String registrationId = null;
+		
 		InternalRegistrationStatusDto registrationStatusDto = new InternalRegistrationStatusDto();
 		try {
 
@@ -217,14 +218,10 @@ public class PacketValidateProcessor {
 					packetValidationDto);
 			if (isValid) {
 
-				InputStream auditFileInputStream = fileSystemManager.getFile(registrationId, PacketFiles.AUDIT.name());
-				CollectionType collectionType = mapper.getTypeFactory().constructCollectionType(List.class,
-						AuditDTO.class);
-				List<AuditDTO> regClientAuditDTOs = mapper.readValue(auditFileInputStream, collectionType);
 				// save audit details
 				Runnable r = () -> {
 					try {
-						auditUtility.saveAuditDetails(regClientAuditDTOs);
+						auditUtility.saveAuditDetails(registrationId);
 					} catch (Exception e) {
 						regProcLogger.error(LoggerFileConstant.SESSIONID.toString(),
 								LoggerFileConstant.REGISTRATIONID.toString(),
@@ -467,7 +464,6 @@ public class PacketValidateProcessor {
 			auditLogRequestBuilder.createAuditRequestBuilder(description.getMessage(), eventId, eventName, eventType,
 					moduleId, moduleName, registrationId);
 		}
-		System.out.println("************Executed ***********");
 
 		return object;
 
@@ -492,7 +488,7 @@ public class PacketValidateProcessor {
 
 		byte[] bytearray = IOUtils.toByteArray(idJsonStream);
 		String jsonString = new String(bytearray);
-		ObjectMapper mapper = new ObjectMapper();
+//		ObjectMapper mapper = new ObjectMapper();
 		JSONObject idObject = mapper.readValue(bytearray, JSONObject.class);
 
 		if (!schemaValidation(idObject, registrationStatusDto, packetValidationDto)) {
